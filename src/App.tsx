@@ -1,4 +1,50 @@
 import React from "react";
+import {
+  Button,
+  TextField,
+  IconButton,
+  makeStyles,
+  Typography,
+} from "@material-ui/core";
+import Add from "@material-ui/icons/Add";
+import Remove from "@material-ui/icons/Remove";
+import Edit from "@material-ui/icons/Edit";
+
+const useStyles = makeStyles((a) => ({
+  rollButton: {},
+  diceGroup: {
+    flexDirection: "column",
+    margin: a.spacing(1),
+  },
+  dieText: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+  },
+  totalResultContainer: {
+    display: "flex",
+    minWidth: a.spacing(12),
+    flexDirection: "column",
+    justifyContent: "center",
+  },
+  totalResult: {
+    textAlign: "center",
+  },
+  diceResults: {
+    display: "flex",
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+  die: {
+    display: "flex",
+    margin: a.spacing(1),
+    padding: a.spacing(1),
+    minWidth: a.spacing(3.5),
+  },
+  addDie: {
+    maxWidth: a.spacing(12),
+  },
+}));
 
 const rollDie = (upTo: number) => {
   return Math.floor(Math.random() * upTo) + 1;
@@ -6,23 +52,41 @@ const rollDie = (upTo: number) => {
 
 interface DieProps {
   type: number;
-  lastRoll: number | undefined;
+  lastRoll: number;
+  removeSelf?: () => void;
 }
 
-const Die: React.FC<DieProps> = ({ type, lastRoll }) => {
+const range = (n: number): number[] => {
+  const array = [];
+  for (let i = 0; i < n; i++) {
+    array.push(i);
+  }
+  return array;
+};
+
+const Die: React.FC<DieProps> = ({ type, lastRoll, removeSelf }) => {
+  const classes = useStyles();
+  const rows = React.useMemo(() => Math.floor(Math.sqrt(type)) || 1, [type]);
+  console.log({ type, rows });
   return (
-    <div style={{ display: "flex" }}>
-      <span>
-        D{type}: {` `}
-        {lastRoll !== undefined && lastRoll}
-        {lastRoll === undefined && "nope"}
-      </span>
+    <div className={classes.die}>
+      <div className={classes.dieText}>
+        <Typography variant="body1">D{type}</Typography>
+        <Typography variant="h4">{lastRoll}</Typography>
+      </div>
+      <span></span>
+      {removeSelf && (
+        <IconButton color="secondary" onClick={removeSelf}>
+          <Remove />
+        </IconButton>
+      )}
     </div>
   );
 };
 
 interface DieType {
   type: number;
+  lastRoll: number;
 }
 
 interface DiceGroupProps {
@@ -30,76 +94,113 @@ interface DiceGroupProps {
   setName: (newName: string) => void;
   dice: DieType[];
   addDie: (type: number) => void;
+  setDice: (dice: DieType[]) => void;
+  removeDie: (idx: number) => () => void;
 }
 
 const DiceGroup: React.FC<DiceGroupProps> = ({
   name,
   setName,
   dice,
+  setDice,
   addDie,
+  removeDie,
 }) => {
-  const [lastRolls, setLastRolls] = React.useState<number[]>([]);
+  const classes = useStyles();
   const [localName, setLocalName] = React.useState(name);
   const [nextDie, setNextDie] = React.useState("6");
 
   const rollGroup = React.useCallback(() => {
-    setLastRolls(dice.map(({ type }) => rollDie(type)));
+    setDice(
+      dice.map((die) => {
+        const currentRoll = rollDie(die.type);
+        return { ...die, lastRoll: currentRoll };
+      })
+    );
   }, [dice]);
 
   const [isNaming, setIsNaming] = React.useState(false);
 
+  const addNewDie = React.useCallback(() => {
+    const next = parseInt(nextDie);
+    if (isNaN(next)) {
+      return;
+    }
+    addDie(next);
+  }, [nextDie]);
+
   return (
-    <div>
+    <div className={classes.diceGroup}>
       <div>
-        {!isNaming && (
-          <h3 onClick={() => setIsNaming((old) => !old)}>
-            {name || "Unnamed Group. Click to name"}
-          </h3>
-        )}
-        {isNaming && (
-          <div>
-            <input
-              value={localName}
-              onBlur={() => {
-                setIsNaming(false);
-                setName(localName);
-              }}
-              onChange={(e) => setLocalName(e.target.value)}
-            />
-            <button
-              onClick={() => {
-                setIsNaming(false);
-                setName(localName);
-              }}
-            >
-              Done
-            </button>
-          </div>
-        )}
+        <TextField
+          fullWidth
+          value={localName}
+          disabled={!isNaming}
+          onBlur={() => {
+            setIsNaming(false);
+            setName(localName);
+          }}
+          onChange={(e) => setLocalName(e.target.value)}
+          InputProps={{
+            endAdornment: (
+              <IconButton>
+                <Edit onClick={() => setIsNaming((old) => !old)} />
+              </IconButton>
+            ),
+          }}
+        />
       </div>
-      <button
-        onClick={() => {
-          const next = parseInt(nextDie);
-          if (isNaN(next)) {
-            return;
-          }
-          addDie(next);
-        }}
-      >
-        Add Die
-      </button>
-      {dice.length > 0 && <button onClick={rollGroup}>Roll Group</button>}
-      <input
-        value={nextDie}
-        onChange={(e) => {
-          setNextDie(e.target.value);
-        }}
-      />
-      {dice.map(({ type }, idx) => (
-        <Die key={`${type}-${idx}`} type={type} lastRoll={lastRolls[idx]} />
-      ))}
-      {lastRolls.every((a) => a !== undefined) && (
-        <div>Total: {lastRolls.reduce((a, b) => a + b, 0)}</div>
+
+      <div className={classes.diceResults}>
+        <div className={classes.totalResultContainer}>
+          <Typography variant="h3" className={classes.totalResult}>
+            {dice.length > 0 &&
+            dice.map((d) => d.lastRoll).every((a) => a !== undefined)
+              ? dice.map((die) => die.lastRoll).reduce((a, b) => a! + b!, 0)
+              : "n/a"}
+          </Typography>
+          {dice.length > 0 && (
+            <Button
+              className={classes.rollButton}
+              color="primary"
+              variant="outlined"
+              onClick={rollGroup}
+            >
+              Roll
+            </Button>
+          )}
+        </div>
+        {dice.map((die, idx) => (
+          <Die
+            removeSelf={isNaming ? removeDie(idx) : undefined}
+            key={`${die.type}-${idx}`}
+            type={die.type}
+            lastRoll={die.lastRoll}
+          />
+        ))}
+      </div>
+      {isNaming && (
+        <TextField
+          className={classes.addDie}
+          label={`Sides`}
+          value={nextDie}
+          onKeyPress={(e) => {
+            console.log({ e });
+            if (e.charCode == 13) {
+              addNewDie();
+            }
+          }}
+          onChange={(e) => {
+            setNextDie(e.target.value);
+          }}
+          InputProps={{
+            endAdornment: (
+              <IconButton onClick={addNewDie}>
+                <Add />
+              </IconButton>
+            ),
+          }}
+        />
       )}
     </div>
   );
@@ -153,7 +254,48 @@ function App() {
       setGroups((old) =>
         old.map((group, gi) => {
           if (gi === groupIdx) {
-            return { ...group, dice: group.dice.concat([{ type: upTo }]) };
+            return {
+              ...group,
+              dice: group.dice.concat([{ type: upTo, lastRoll: 0 }]),
+            };
+          } else {
+            return group;
+          }
+        })
+      );
+    },
+    []
+  );
+
+  const setDice = React.useCallback(
+    (groupIdx: number) => (dice: DieType[]) => {
+      setGroups((old) =>
+        old.map((group, gi) => {
+          if (gi === groupIdx) {
+            return {
+              ...group,
+              dice,
+            };
+          } else {
+            return group;
+          }
+        })
+      );
+    },
+    []
+  );
+
+  const removeDie = React.useCallback(
+    (groupIdx: number) => (dieIdx: number) => () => {
+      setGroups((old) =>
+        old.map((group, gi) => {
+          if (gi === groupIdx) {
+            const oldDice = group.dice;
+            const newDice = oldDice
+              .slice(0, dieIdx)
+              .concat(oldDice.slice(dieIdx + 1));
+            console.log(newDice);
+            return { ...group, dice: newDice };
           } else {
             return group;
           }
@@ -166,18 +308,22 @@ function App() {
   return (
     <div className="App">
       <p>No, you're a dice app</p>
-      <button onClick={addGroup}>Add group</button>
       {groups.map(({ name, dice }, idx) => {
         return (
           <DiceGroup
             key={idx}
             name={name}
             dice={dice}
+            setDice={setDice(idx)}
             setName={setName(idx)}
             addDie={addDie(idx)}
+            removeDie={removeDie(idx)}
           />
         );
       })}
+      <Button fullWidth color="primary" variant="contained" onClick={addGroup}>
+        Add group
+      </Button>
     </div>
   );
 }
